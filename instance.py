@@ -1,12 +1,11 @@
 import pandas as pd
-import instance;
 
 # in this class we define an instance : its same as an row (series) pandas
 #------------------------------------------------------
 class inst:
 
     # define params.
-    #@param dictionary h : contai,ns set of params with their values.
+    #@param dictionary h : contains set of params with their values.
     
     #---------------------------------------------------
     # Initializer / Instance Attributes
@@ -23,6 +22,22 @@ class inst:
     def addPair(self, key, value):
         self.h[str(key)] = str(value);        
         return;
+    #---------------------------------------------------    
+    def isKey(self,key):
+        return (key in self.h.keys());        
+    #---------------------------------------------------
+    def getValue(self, key):
+        if(self.isKey(key)):
+           return self.h[key];
+        return None;
+    #----------------------------------------------------
+    def getAttributes(self):
+        return self.h.keys();
+    #----------------------------------------------------
+    def items(self,separated=False):
+        if(separated):
+            return (self.h.keys(), self.h.values());
+        return self.h.items();
     #---------------------------------------------------- 
     # To Str : is method , return the instance as a string.
     def toStr(self , typ, sep="\t"):
@@ -42,9 +57,38 @@ class inst:
         return s;
 #------------------------------------------------------------
 
-##s = pd.Series([]);
-##s['a'] = 'aa';
-##s['b'] = 'bb';
-##
-##it = inst(s);
-##print(it.toStr("value"));
+# in this class we define a cluster : 
+#------------------------------------------------------
+class cluster:
+
+    # define params.
+    #@param dictionary G : contains set instances
+    #@param center c : represent the cluster center.
+    
+    #---------------------------------------------------
+    # Initializer / Instance Attributes
+    def __init__(self):
+        self.G = list([]);
+        self.c = None;
+    #----------------------------------------------------            
+    # add an instance to the cluster.
+    def addInstance(self, it):
+        self.G.append(it);                    
+        return;
+    #----------------------------------------------------
+    def setCenter(self, c):
+        self.c = c;
+        return;
+    #---------------------------------------------------- 
+    def size(self):
+        return len(self.G);
+    #----------------------------------------------------
+    def get(self,i):
+        if ( i <0 or i> self.size()):
+            return None;
+        return self.G[i];
+    #----------------------------------------------------
+    def clear(self):
+        self.G=list([]);
+        return;
+#------------------------------------------------------------
