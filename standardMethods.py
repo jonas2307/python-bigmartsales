@@ -1,7 +1,7 @@
 import re
 import random
 import numpy as np
-
+import instance
 
 #----------------------------------------------------
 # this method check if an string value is a float or not
@@ -56,6 +56,21 @@ def Print(L,typ, sep="\n"):
                 print(text); text="";
         print(text); text="";
     #-------------------------------------------------
+    # if the type is cluster list
+    elif(typ.lower() == 'cluster'):
+        for i in range(0,len(L)):            
+            clust = L[i];
+            text = text +" ------------------------ "+sep;
+            text = text + "size : "+str(clust.size())+sep;
+            if (clust.c != None):
+                text = text +"center : "+ clust.c.toStr("value")+ sep;
+            else:
+                text = text + " no center for this cluster "+sep;
+            print(text);text="";
+            
+            Print(clust.G, "instance");
+    #-------------------------------------------------
+
         
     return;
 #-----------------------------------------------------------------------
@@ -144,12 +159,22 @@ def Remove(L,I):
     # build a numpy arry 
     K = np.array(L);
     for i in range(0,len(I)):
-        ind = I[i];
+        ind = I[i];        
         K = np.delete(K,ind);
-        
+        #print("ind : ",ind,K);
     return list(K);
 #----------------------------------------------------
-    
-##l=[10,15,12,10,12,11];
-##L=[0,4, 2];
-##print(Remove(l,L));
+
+# this method return the index of the minimum element in a numpy array.
+# l : the array that we want to get the minimum value.
+#----------------------------------------------------
+def IndexMin(l):
+    pMin = None;
+    vMin=10e64;
+    for i in range(0,len(l)):
+        v = l[i];
+        if(IsFloat(v) and (not np.isnan(float(v))) and float(v)<vMin):
+            vMin = float(v);
+            pMin = i;
+    return pMin;
+#-------------------------------------------------------
