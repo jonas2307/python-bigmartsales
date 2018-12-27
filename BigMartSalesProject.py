@@ -29,6 +29,7 @@ import pymongo
 import urllib
 import graphviz
 import random
+import math;
 
 from sklearn.cluster import KMeans
 from sklearn import tree
@@ -72,7 +73,6 @@ def ReadFile(path, typeFile):
     return data;
 #-----------------------------------------------------
 
-# 
 # row : set of data
 # Return : row as list.
 #------------------------------------------------------
@@ -424,6 +424,7 @@ def BoxPlotAllAtts(data, picFolder):
 #---------------------------------------------------
 def KmeansAlgorithm(data, toPrint):
 
+    # the cluster number
     nbr_clus = 4;
     
     #YOUNES  : what is that ?
@@ -447,11 +448,16 @@ def KmeansAlgorithm(data, toPrint):
     
     if(toPrint):
         for e in L:
-            print(G.get_group(e));
-            
+            group = G.get_group(e) 
+            I = DataToInstances(group,0,10);
+            # print 
+            sm.Print(I,"instance");
+                        
     #return set of group, grouped by class !
     return G;
-#-------------------------------------------------
+#----------------------------------------------------
+
+
 # test version , not a complete one (15/12/2018 13:36)
 # in this method we will use special Apriori algorithm to get the association rules.
 # data : our data, its a nominal data.
@@ -555,6 +561,7 @@ def DataFrameToListOfList(data, toPrint):
     # return list of list.    
     return L;
 #--------------------------------------------------
+
 # this method reference the class, by new referencing name,
 # for example if we want to divide set of numeric data in nbr of classes,
 # based in range, we replace first 'range 1' : "0_20" by att_C1 etc.
@@ -573,7 +580,6 @@ def GetReferencesNames(att, L):
     return h;
 #---------------------------------------------------
 
-#--------------------------------------------------
 # the aim of this  method is to take  give for each data element,
 # with a numeric value , a nominal class,
 # data : set of records, (an array)
@@ -742,8 +748,8 @@ def DecisionTree(dTrain, dTest, clas, pathOutGraph):
     #print(graph);
 
     return Y;
-#----------------------------------------------------
-# ------------ update : 19/12 -----------------------
+#---------------------------------------------------------
+# ==================== update : 19/12 ====================
 
 # this method create an instance based on data (row)
 # row : the data.
@@ -780,6 +786,7 @@ def DataToInstances(data,startIndex,endIndex):
     
     #for each row
     for i in range(startIndex,endIndex):
+        #print(i)
         #get the row!
         index = list(data.index);
         idx = index[i];
@@ -788,6 +795,9 @@ def DataToInstances(data,startIndex,endIndex):
 
         #create the instance
         it = RowToInstance(row);
+
+        # add the id
+        it.addPair("id",str(i));
 
         # add instance to the list!
         I.append(it);
@@ -834,7 +844,6 @@ def GetRandomRow(data,atts, L):
 # data : is the original dataset.
 # size : the number of instances.
 # withReplace : if true , so we allow process to get element more than one time
-
 #-----------------------------------------------------
 def GetRandomData(data, size, withReplace=True):
     # get attributes.
@@ -857,8 +866,7 @@ def GetRandomData(data, size, withReplace=True):
     print("data out ! ",len(dat));
     
     return dat;
-#===========================================================
-# Update 21 / 12
+#======================= Update 21 - 12 ================================
 
 # this method take a data (dataframe) and generate set of boostrap data
 # data : the main data.
@@ -898,7 +906,6 @@ def BoostrapProcessExample(data):
     else:
         I = DataToInstances(D['1'],None,None);
     sm.Print(I,"instance");    
-    exit();
     
     return;
 #------------------------------------------------------    
@@ -948,14 +955,6 @@ def ReplaceNaNValues(data,dTy):
 #-----------------------------------------
 def RandomForest(data,test, dTy, clas, nbrTrees=4,maxDept = 3):
 
-##    Proto-type
-##    RandomForestClassifier(bootstrap=True, class_weight=None, criterion='gini',
-##            max_depth=2, max_features='auto', max_leaf_nodes=None,
-##            min_impurity_decrease=0.0, min_impurity_split=None,
-##            min_samples_leaf=1, min_samples_split=2,
-##            min_weight_fraction_leaf=0.0, n_estimators=100, n_jobs=None,
-##            oob_score=False, random_state=0, verbose=0, warm_start=False);
-
     # get target
     # replace the nan values by (mode , mean see method).
     data = ReplaceNaNValues(data,dTy);    
@@ -994,6 +993,7 @@ def RandomForest(data,test, dTy, clas, nbrTrees=4,maxDept = 3):
 
     # we use kfold , it use for cross_val_score method
     kfold = 3;
+    
     # compute the score of cross validation
     scores = cross_val_score(clf, X, T, cv=kfold);
     me = scores.mean();
@@ -1002,6 +1002,452 @@ def RandomForest(data,test, dTy, clas, nbrTrees=4,maxDept = 3):
 
     return;
 #-----------------------------------------------------
+
+# ============ Update 25/26/27 - 12 ==============================
+
+# this method take set of instances and parse them to pandas dataframe.
+# I : the set of instances.
+# startIndex : the index of the first element.
+# endIndex : the index of last first element.
+# atts : the instance attributes.
+#--------------------------------------------------------------------
+def InstancesToData(I,startIndex,endIndex, atts):
+    #init the index
+    idx = np.arange(len(I));
+    data=pd.DataFrame(columns=atts);  
+
+    # update the start, end index.
+    if(startIndex == None):
+        startIndex = 0;
+    if(endIndex == None):
+        endIndex = len(I);
+    
+    #for each instance
+    for i in range(startIndex,endIndex):
+
+        # get the instance.
+        it = I[i];
+
+        #get the items (keys and values)
+        (keys,values) = it.items(separated=True);
+        # create the pandas series
+        s = pd.Series(data = list(values), index = list(keys));
+
+        # add the series to the dataframe.
+        data = data.append(s, ignore_index=True);
+
+    return data;    
+#-----------------------------------------------------------------------
+
+# define my own k-means version
+# data : the dataset
+# k : the number of clusters
+# iters : the number of iterations
+# converg : the stop condition
+#----------------------------------------------------
+def KmeansCustomized(data, dTy, k=3,iters=10,converg=0.001):
+    # data is loaded :
+    lastInter = None; lastIntra = None;
+    
+    # normalize the data !
+    data = Normalize(data, dTy);
+    #print(data);
+
+    # 1-  parse it to set of instances.
+    I = DataToInstances(data,None,None);
+
+    # -- try some methods here !
+    atts = I[0].getAttributes();
+    
+    # parse instance to dataframe.
+    # d = InstancesToData(I,None,None,atts);
+    
+    # add option to set default centers.
+    # 2-  Loop.
+    C = None;
+    for i in range(0,iters):
+        if i == 0:
+            # get the centers (randomly) and init the clusters
+            c = RandomInstances(I,k);
+            C = InitClusters(k,c);            
+            
+        else :
+            # compute the new centers and reset the clusters
+            c = ClusterCenters(C,dTy, compute=True); 
+            C = ResetCluters(C,c);
+            
+        #   compute distance and genrate matrix distance ! mDist;         
+        mDist = MatrixDistance(I, c, atts, dTy);
+        #print(mDist);
+        
+        #   for each instance set to the nearest cluster.
+        C = AssignInstance(mDist, I,C);
+
+        # print list of clusters.
+        #sm.Print(list(C.values()),"cluster");
+        
+        #   compute the inter/intra distance.
+        
+        (intra,inter)=MetricDistances(C,atts, dTy, intra=True,inter=True);
+        print("iteration : "+str(i),inter,intra); 
+        #input();
+
+        # check the convergence -- to develop this here --
+        if(converg != None):
+            if (i > 0):
+                
+                # get the convergenc of the inter/intra distances
+                convInter = np.absolute( (inter - lastInter) / inter);
+                convIntra = np.absolute( (intra - lastIntra) / intra);
+
+                # stop condition
+                if(convInter <= converg and convIntra <= converg):
+                    print("onvergence", converg, convInter , convIntra);
+                    break;
+            
+            # update last inter/intra distances.
+            lastInter = inter;
+            lastIntra = intra;   
+        
+    y_pred = PredictFromClusters(C,len(data));    
+    return y_pred;
+#--------------------------------------------------
+
+# this method get the predict classes from the clusters.
+# C : the clusters.
+# l : the length of the output.
+#----------------------------------------------------
+def PredictFromClusters(C,l):
+    # create a predict array full of '-1' ( '-1' = not classified)
+    y = (-1)*np.ones(l);
+    # for each cluster
+    for num_clus in C.keys():
+        # get the cluster
+        clus = C[num_clus];
+        # for each instance of the cluster
+        for it in clus.G:
+            # get the id attribute
+            id_it = it.getValue("id");
+            # if instance has an id, set it in y predict array
+            if (id_it != None):
+                y[int(id_it)] = int(num_clus);
+    return y;
+#----------------------------------------------------
+
+# this method normalize numeric data between [0,1]
+# data : the data set that we want to normalize it.
+# dTy : the attributes types (numerical , nominal)
+#---------------------------------------------------
+def Normalize(data, dTy):
+
+    # get the set of attributes
+    atts = data.columns;
+    # get maximum, minimum serie (of all data)
+    serie_min = data.min(skipna=True);
+    serie_max = data.max(skipna=True);
+    # we normalize between a and b
+    a = 0.0;
+    b = 1.0;
+
+    # for each attribute
+    for att in atts :
+        # we normalize only the numericals attributes
+        if((att in dTy.keys()) and dTy[att] == 'numerical'):
+            # get the data attribute
+            d = data[att];
+            # get the min and max of attribute column
+            mi = serie_min[att];
+            ma = serie_max[att];
+            # normalize the column
+            d = NormalizeColumn(d, a, b, mi, ma);
+            # update the attibute data.
+            data[att] = d;    
+    return data;
+#----------------------------------------------------
+
+# this method normalize the comumn values (pandas.Series) between ['a' and 'b']
+# data : the set of values.
+# a : the minimum normalized value.
+# b : the maximum normalized value.
+# mi : the minimum value of the current data before normalization.
+# ma : the maximum value of the current data before normalization.
+#--------------------------------------------------
+def NormalizeColumn(data, a,b, mi,ma):
+    df = ma - mi;
+    for i in range(0,len(data)):
+        val = data.iloc[i];
+        if(not np.isnan(float(val))):
+            val = ((b-a)*(val - mi)/df)+a;
+            data.iat[i] = val;
+    return data;
+#---------------------------------------------------
+
+# this method return the interclasses distance and intra-classes distances.
+# C : the clusters.
+# atts : the attributes set
+# dTy : the attribute type (numerical , nominal)
+# intra : if true , we compute the intra - distance.
+# inter : if true , we compute the inter - distance.
+#-----------------------------------------------------
+def MetricDistances(C,atts,dTy, intra=True,inter=True):
+    intraD = None;
+    interD = None;
+    d = 0.0;
+    
+    L = list(C.keys());
+    #--------------------------------------------
+    if(inter == True):
+        for i in range(0, len(L)):
+            k1 = L[i]; c1 = C[k1];
+            for j in range(i+1, len(L)):
+                k2 = L[j]; c2 = C[k2];
+                d = d+ distance(c1.c,c2.c,atts,dTy);
+        interD = d;d=0.0;
+    #--------------------------------------------
+    if(intra == True):
+        for i in range(0, len(L)):
+            k1 = L[i]; clus = C[k1];
+            for it in clus.G:
+                d = d + distance(it,clus.c,atts,dTy);
+        intraD = d;d=0;
+        
+    return (intraD,interD);
+#----------------------------------------------------
+
+# this method assign the Instances to the nearest cluster.
+# mDist : the distance matrix.
+# I : the instances set.
+# C : the clusters set.
+#--------------------------------------------------
+def AssignInstance(mDist, I,C):
+    # for each instance.
+    for i in range(0,len(I)):
+
+        #get the instance.
+        it = I[i];
+
+        # get the set of distance between this inst an clusters
+        l = mDist[i,:];        
+        
+        # now find the min distance.
+        p = sm.IndexMin(l)
+        
+        # affect to the nearest cluster.
+        clus = C[p]; clus.addInstance(it);
+
+        # update the cluster list.
+        C[p] = clus;
+
+    return C;
+#-----------------------------------------------------
+
+# this method allow us to compute the distance between the instances and the clusters centers
+# I : the set of instances;
+# c : the set of clusters;
+# atts : the set of attributes;
+# dTy : dictionary contains the attributes type (nominal, numerical);
+#---------------------------------------------------------
+def MatrixDistance(I,c,atts, dTy):
+    
+    # init a distance matrix
+    mDist = np.array([]);
+
+    # for each instance
+    for i in range(0,len(I)):
+        # get the inst
+        it = I[i];
+        
+        # compute the distances between this inst and the clusters
+        l = distanceTo(it, c, atts, dTy);
+
+        # if it is first iteration , set the distances array
+        if i == 0:
+            mDist = np.array([l]);
+        else:
+            # update the distance matrix.
+            mDist = np.vstack((mDist,l));        
+    
+    return mDist;
+#-----------------------------------------------------
+
+# this method compute the distances between an instance and clusters set and return distance as array.
+# it_1 : the first instance.
+# c : the clusters.
+# atts : the attributes set.
+# dTy : the type dictionary.
+#-----------------------------------------------------
+def distanceTo(it, c,atts, dTy):
+    L=list([]);
+    # for each cluster
+    for i in range(0,len(c)):
+        # get the cluster.
+        center = c[i];
+        # compute th distance between the instance and the cluster.
+        d = distance(it, center,atts, dTy);
+        # add the distance to the list.
+        L.append(d);
+
+    # parse the list to numpy array
+    l = np.array(L);
+    return l;
+#-----------------------------------------------------
+
+# this method compute the distance between two instances and return it.
+# it_1 : the first instance.
+# it_2 : the second instance.
+# atts : the attributes set.
+# dTy : the type dictionary.
+#-------------------------------
+def distance(it_1, it_2, atts, dTy):
+    # we need to normalize ourdata.
+    d = 0.0;
+    # for each attribute
+    for att in atts :
+        # get the values
+        v1 = it_1.getValue(att);
+        v2 = it_2.getValue(att);
+        if(v1 == None or v2 == None):
+            continue;
+        # if its numerical 
+        if((att in dTy.keys())and dTy[att] == 'numerical'):
+            # if one of values is nan , we skip it
+            if(math.isnan(float(v1)) or math.isnan(float(v2))):
+                continue;
+            # compute the absolute value of the difference
+            df = np.abs(float(v1)-float(v2));
+            # we can change it to k-spaces see later.
+            d = d+ np.power(df,2);            
+        elif ((att in dTy.keys()) and dTy[att] == 'nominal'):
+            # if nominal , so if they are equals =0; otherwise add 1.
+            if(v1 != v2):
+                d = d + 1;
+                
+    # we apply sqrt! (eucludien) -- change it to k (^1/k)
+    d = np.sqrt(d);
+    return d;
+#-----------------------------------------------------
+
+# this method reset the clusters (remove all instances and put the new centers)
+# C : the set of clusters.
+# c : the set of centers.
+#-----------------------------------------------------
+def ResetCluters(C,c):
+    for clus_num in C.keys():
+        clust = C[clus_num];
+        center = c[clus_num];
+        clust.clear();
+        clust.setCenter(center);
+        C[clus_num] = clust;
+    return C;
+#-----------------------------------------------------
+
+# this method return a set of instance (R) randomly.
+# I : set of instances.
+# k : the number of instances to return from I
+#-----------------------------------------------------
+def RandomInstances(I,k):
+    R = list([]);
+    # generate a set of index
+    L = np.arange(len(I));
+    # loop
+    for i in range(0,k):
+        # get a random element in L
+        r = np.random.randint(0,(len(L)-1)); p = L[r];
+        #print(p);
+        # get the instance and add it to R list
+        it = I[p]; R.append(it);
+        L = sm.Remove(L, [r]);                
+        #print(L);
+        
+    return R;
+#-----------------------------------------------------
+
+# this method get the clusters centers
+# C : the set of clusters.
+# dTy: a dictionary contains the attrbutes type (nominal , numerical)
+# compute : if true so we compute the cluster centers,
+#           if fale se we return the cluster centers.
+#----------------------------------------------------
+def ClusterCenters(C, dTy, compute=True):
+
+    c=dict();
+    if compute :
+        #- compute the centers.
+        for num in C.keys():
+            clus = C[num];
+            c[num] = GetCenter(clus, dTy);
+            #print(c[num].toStr('both'));
+    else :
+        # return the centers only
+        for num in C.keys():
+            clus = C[num];
+            c[num] = clus.c;
+
+    return c;
+#-----------------------------------------------------
+
+# in this method we compute the cluster center parse always instances to data take time)
+# clust : the main cluster.
+# dTy: a dictionary contains the attrbutes type (nominal , numerical)
+#---------------------------------------------------------------------
+def GetCenter(clus, dTy):
+
+    # init the series (will contains the set of centers.
+    s = pd.Series([]);
+    
+    # get the set of attributes    
+    atts = list([]);
+    # if cluster contains at least one element
+    if clus.size()>0:
+        # get the instance
+        it = clus.get(0);
+        # update the set of attribute
+        atts = it.getAttributes();
+
+    # idea is to transform instance to a pandas dataframe !
+    data = InstancesToData(clus.G, None, None, atts);
+    
+    # iterate the set of instances of the cluster. (we consieder data are normalized)
+    # use the attribute type
+    for att in atts :
+        
+        # if the attribut is numerical , so we compute his mean and we update the series 
+        if( (att in dTy.keys()) and dTy[att] == 'numerical'):
+            l= np.array(data[att]);
+            l=[v for v in l if(not np.isnan(float(v)))];
+            l=[float(v) for v in l ];
+            l= np.array(l);
+            m = np.mean(l);
+            s[att] = m;
+        elif ((att in dTy.keys())and dTy[att] == 'nominal'):
+            # if the attribut is nominal , so we compute his mode and we update the series
+            mo = list(data[att].mode());
+            mo = mo[0];
+            s[att] = mo;
+
+    # create center instance
+    center = instance.inst(s);    
+    return center;
+#----------------------------------------------------
+
+# in this method we init set of clusters
+# k : the number of clusters,
+# cList : cluster list.
+#----------------------------------------------------
+def InitClusters(k, cList = None):
+
+    # create a clusters dictionary
+    C=dict();
+    for i in range(0,k):
+        # init a cluster (center = None, and group is empty)
+        c = instance.cluster();
+        # if set of clusters are passed, update the center.
+        if(cList != None):
+            if(i < len(cList)):
+                c.setCenter(cList[i]);
+        C[i] = c; 
+    return C;
+#--------------------------------------------------------------------
 
 
 
@@ -1050,10 +1496,28 @@ picFolder = "D:/EdxCourses/Data Science/DataBases/bigmart-sales-data/img";
 
 #--------------- K-means ----------------------------------------
 # remove nan values to user Kmean
+data = data.dropna();
+data = TransformData(data);
 dNum = dNum.dropna();
+dNum = data;
 #KmeansAlgorithm(dNum, True);
 
-#---------------- Nomalize data (convert numeric data to nominal ones)
+# ---- Kmeans Customized ! ---------------------------------------
+filePath="D:/EdxCourses/Data Science/DataBases/bigmart-sales-data/Train.csv";
+typeFile='csv'; data = ReadFile(filePath, typeFile);
+
+#data = data.iloc[0:600];
+y_pred = KmeansCustomized(data, dTy, k=5,iters=12,converg=0.0004);
+
+exit();
+
+#-----------ReLoad Data ----- Nomalize data (convert numeric data to nominal ones)
+filePath="D:/EdxCourses/Data Science/DataBases/bigmart-sales-data/Train.csv";
+typeFile='csv'; data = ReadFile(filePath, typeFile);
+data = data.dropna();
+data = TransformData(data);
+dNum = dNum.dropna();
+dNum = data;
 # remove the 'Outlet_Establishment_Year'
 dNum =dNum.drop(columns=['Outlet_Establishment_Year']);
 
@@ -1093,15 +1557,8 @@ IN = dTrain;
 # the test data.
 TEST = dTest;
 # generate the random forest.
-RandomForest(IN,TEST, dTy, clas, 5, 4)
-
-
+#RandomForest(IN,TEST, dTy, clas, 5, 4)
 
 # --------- End of file --------------------------------
-
-
-
-
-
 
 
